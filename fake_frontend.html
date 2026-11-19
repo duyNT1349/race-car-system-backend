@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Đua Xe - Capstone Project 1</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .dashboard { background: #1e293b; width: 100%; max-width: 500px; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; text-align: center; }
+        h1 { font-size: 22px; margin-bottom: 5px; color: #38bdf8; letter-spacing: 1px; }
+        p.subtitle { font-size: 13px; color: #94a3b8; margin-bottom: 25px; }
+        
+        .status-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 1px; }
+        .disconnected { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+        .connected { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #22c55e; }
+        
+        .card { background: #0f172a; padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #1e293b; }
+        .card-label { font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: bold; margin-bottom: 8px; }
+        .timer-display { font-size: 42px; font-weight: bold; color: #38bdf8; font-family: monospace; }
+        .foul-display { font-size: 18px; font-weight: bold; }
+        .foul-safe { color: #4ade80; }
+        .foul-danger { color: #ef4444; animation: pulse 1s infinite; }
+
+        .btn-group { display: flex; gap: 15px; margin-top: 10px; }
+        button { flex: 1; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; transition: all 0.2s ease; text-transform: uppercase; }
+        .btn-start { background: #22c55e; color: #052e16; }
+        .btn-start:hover { background: #16a34a; transform: translateY(-2px); }
+        .btn-reset { background: #ef4444; color: #450a0a; }
+        .btn-reset:hover { background: #dc2626; transform: translateY(-2px); }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <h1>RACE CAR TELEMETRY</h1>
+        <p class="subtitle">Đồ án 1 - Hệ thống thu thập dữ liệu xe đua</p>
+
+        <div id="status-badge" class="status-badge disconnected">Disconnected</div>
+
+        <div class="card">
+            <div class="card-label">Thời gian vòng đua (Lap Time)</div>
+            <div id="lap-time" class="timer-display">00:00.00</div>
+        </div>
+
+        <div class="card">
+            <div class="card-label">Trạng thái phạm quy (Foul Status)</div>
+            <div id="foul-status" class="foul-display foul-safe">AN TOÀN</div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-start" onclick="sendCommand('start')">Start</button>
+            <button class="btn-reset" onclick="sendCommand('reset')">Reset</button>
+        </div>
+    </div>
+
+    <script>
+        // Kết nối tới WebSocket Server (Backend Python FastAPI)
+        const ws = new WebSocket("ws://localhost:8000/ws");
+        
+        const statusBadge = document.getElementById("status-badge");
+        const lapTimeEl = document.getElementById("lap-time");
+        const foulStatusEl = document.getElementById("foul-status");
+
+        // Khi kết nối thành công với Backend
+        ws.onopen = () => {
+            statusBadge.innerText = "Connected";
+            statusBadge.className = "status-badge connected";
+        };
+
+        // Khi nhận dữ liệu real-time từ Backend (ESP32 bắn qua)
+        ws.onmessage = (event) => {
+            console.log("Nhận dữ liệu từ Backend:", event.data);
+            try {
+                const data = JSON.parse(event.data);
+                
+                // 1. Cập nhật Lap time
+                if (data.lap_time_car1) {
+                    lapTimeEl.innerText = data.lap_time_car1;
+                } else if (data.time) {
+                    lapTimeEl.innerText = data.time;
+                }
+
+                // 2. Cập nhật Trạng thái Phạm quy
+                if (data.status_foul !== undefined) {
+                    if (data.status_foul) {
+                        foulStatusEl.innerText = "PHẠM QUY!";
+                        foulStatusEl.className = "foul-display foul-danger";
+                    } else {
+                        foulStatusEl.innerText = "AN TOÀN";
+                        foulStatusEl.className = "foul-display foul-safe";
+                    }
+                }
+            } catch (e) {
+                console.error("Lỗi đọc dữ liệu JSON:", e);
+            }
+        };
+
+        // Khi ngắt kết nối
+        ws.onclose = () => {
+            statusBadge.innerText = "Disconnected";
+            statusBadge.className = "status-badge disconnected";
+        };
+
+        // Gửi lệnh Start / Reset lên Backend
+        function sendCommand(cmd) {
+            if (ws.readyState === WebSocket.OPEN) {
+                const payload = JSON.stringify({ command: cmd });
+                ws.send(payload);
+                console.log("Đã gửi lệnh lên Backend:", payload);
+            } else {
+                alert("Chưa kết nối được với Backend!");
+            }
+        }
+    </script>
+</body>
+</html>
